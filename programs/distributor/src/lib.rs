@@ -56,10 +56,13 @@ pub mod distributor {
             DistributorError::MissingRemainingAccounts
         );
 
-        let key = ctx.accounts.distributor_state.key();
-        let seeds = [key.as_ref(), &[ctx.accounts.distributor_state.distributor_state_bump]];
-
         let mint = ctx.accounts.mint.key();
+        let mint_marker = ctx.accounts.distributor_state.marker_mint;
+        let share_size = ctx.accounts.distributor_state.share_size.to_le_bytes();
+        let number_of_shares = ctx.accounts.distributor_state.number_of_shares.to_le_bytes();
+
+        let seeds = [mint.as_ref(), mint_marker.as_ref(), share_size.as_ref(), number_of_shares.as_ref() , &[ctx.accounts.distributor_state.distributor_state_bump]];
+
         let token_program = ctx.accounts.token_program.key();
         for (authority, token_account) in ctx.remaining_accounts.iter().tuples() {
             require_keys_eq!(
@@ -73,7 +76,7 @@ pub mod distributor {
                 associated_token::create(CpiContext::new(
                     ctx.accounts.associated_token_program.to_account_info(),
                     CreateAta {
-                        payer: ctx.accounts.distributor_authority.to_account_info(),
+                        payer: ctx.accounts.payer.to_account_info(),
                         associated_token: token_account.to_account_info(),
                         authority: authority.to_account_info(),
                         mint: ctx.accounts.mint.to_account_info(),
@@ -116,7 +119,7 @@ pub mod distributor {
                 Burn {
                     mint: ctx.accounts.mint.to_account_info(),
                     from: ctx.accounts.vault.to_account_info(),
-                    authority: ctx.accounts.distributor_state.to_account_info(),
+                    authority: ctx.accounts.distributor_state.to_account_info()
                 },
                 &[&seeds],
             ),
@@ -138,8 +141,8 @@ pub struct Initialize<'info> {
         seeds = [
             mint.key().as_ref(),
             marker_mint.key().as_ref(),
-            share_size.to_be_bytes().as_ref(),
-            number_of_shares.to_be_bytes().as_ref()
+            share_size.to_le_bytes().as_ref(),
+            number_of_shares.to_le_bytes().as_ref()
         ],
         bump
     )]
@@ -194,8 +197,8 @@ pub struct Deposit<'info> {
         seeds = [
             mint.key().as_ref(),
             distributor_state.marker_mint.as_ref(),
-            distributor_state.share_size.to_be_bytes().as_ref(),
-            distributor_state.number_of_shares.to_be_bytes().as_ref()
+            distributor_state.share_size.to_le_bytes().as_ref(),
+            distributor_state.number_of_shares.to_le_bytes().as_ref()
         ],
         bump = distributor_state.distributor_state_bump
     )]
@@ -238,6 +241,8 @@ impl<'a, 'b, 'c, 'info> From<&mut Deposit<'info>> for CpiContext<'a, 'b, 'c, 'in
 #[derive(Accounts)]
 pub struct Distribute<'info> {
     #[account(mut)]
+    pub payer: Signer<'info>,
+
     pub distributor_authority: Signer<'info>,
 
     #[account(
@@ -247,13 +252,14 @@ pub struct Distribute<'info> {
         seeds = [
                 mint.key().as_ref(),
                 distributor_state.marker_mint.as_ref(),
-                distributor_state.share_size.to_be_bytes().as_ref(),
-                distributor_state.number_of_shares.to_be_bytes().as_ref()
+                distributor_state.share_size.to_le_bytes().as_ref(),
+                distributor_state.number_of_shares.to_le_bytes().as_ref()
         ],
         bump = distributor_state.distributor_state_bump
     )]
     pub distributor_state: Account<'info, DistributorState>,
 
+    #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(
         mut,
