@@ -9,7 +9,7 @@ use itertools::Itertools;
 
 use error::DistributorError;
 
-declare_id!("BGiEA94Te36cFoF6Vgw3ZvQTbrLa2EhwrHWMsJgUzEuc");
+declare_id!("5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1");
 
 #[program]
 pub mod distributor {

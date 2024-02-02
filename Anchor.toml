@@ -5,14 +5,20 @@ seeds = true
 skip-lint = false
 
 [programs.localnet]
-distributor = "BGiEA94Te36cFoF6Vgw3ZvQTbrLa2EhwrHWMsJgUzEuc"
+distributor = "5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1"
+
+[programs.devnet]
+distributor = "5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1"
+
+[programs.mainnet]
+distributor = "5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
-wallet = "/home/btolfa/.config/solana/id.json"
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
