@@ -57,7 +57,9 @@ anchor migrate --provider.cluster devnet
 env ANCHOR_WALLET=~/.config/solana/id.json ./node_modules/.bin/ts-node .anchor/deploy.ts
 ```
 
-#### localnet/devnet settings
+#### localnet/devnet settings 
+
+programId [5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1](https://explorer.solana.com/address/5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1?cluster=devnet)
 
 ```
 mint 6VzNqK5a68KTqfkC2xRzF3fH5kKKAA8D2xdPCe6FDxS7
