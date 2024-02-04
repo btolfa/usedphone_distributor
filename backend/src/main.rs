@@ -3,28 +3,36 @@ use anyhow::{anyhow, bail, Context};
 use axum::{
     extract::{rejection::JsonRejection, State},
     http::StatusCode,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
-use backend::{settings::Settings, transaction_status::EncodedConfirmedTransactionWithStatusMeta};
+use backend::{
+    settings::Settings, token_holder::HeliusClient, transaction_status::EncodedConfirmedTransactionWithStatusMeta,
+};
 use distributor::DistributorState;
 use shuttle_secrets::SecretStore;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
+    compute_budget::ComputeBudgetInstruction,
+    instruction::AccountMeta,
+    program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    transaction::Transaction,
 };
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransaction, UiMessage, UiRawMessage, UiTransaction,
 };
+use spl_associated_token_account::get_associated_token_address;
+use spl_token::state::Account as TokenAccount;
 use std::{str::FromStr, sync::Arc};
+use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{field::display, Span};
 
-#[tracing::instrument(skip_all, fields(vault_balance))]
-async fn handle(
+#[tracing::instrument(skip_all)]
+async fn webhook_handle(
     State(state): State<Arc<AppState>>,
     transactions: Result<Json<Vec<EncodedConfirmedTransactionWithStatusMeta>>, JsonRejection>,
 ) -> Result<(), StatusCode> {
@@ -42,24 +50,125 @@ async fn handle(
         return Ok(());
     };
 
+    distribute_tokens(state.as_ref(), vault_balance).await.map_err(|err| {
+        tracing::warn!(%err, "Failed to distribute tokens");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+async fn explicit_handle(State(state): State<Arc<AppState>>) -> Result<(), StatusCode> {
+    let rpc_client = state.program.async_rpc();
+    let data = rpc_client
+        .get_account_data(&state.distributor_state.vault)
+        .await
+        .map_err(|err| {
+            tracing::warn!(%err, "Failed to fetch vault balance");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let vault_account = TokenAccount::unpack(&data).map_err(|err| {
+        tracing::warn!(%err, "Failed to unpack vault account");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    distribute_tokens(state.as_ref(), vault_account.amount)
+        .await
+        .map_err(|err| {
+            tracing::warn!(%err, "Failed to distribute tokens");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all, fields(vault_balance))]
+async fn distribute_tokens(state: &AppState, vault_balance: u64) -> anyhow::Result<()> {
     let span = Span::current();
     span.record("vault_balance", display(vault_balance));
 
     let threshold = state.distributor_state.share_size * state.distributor_state.number_of_shares;
     if vault_balance >= threshold {
-        tracing::info!(%threshold, "threshold reached, distributing");
+        tracing::info!(%threshold, "Threshold reached, distributing");
     } else {
-        tracing::info!(%threshold, "isn't threshold reached");
+        tracing::info!(%threshold, "Threshold isn't reached");
         return Ok(());
     }
+
+    let mut helius_client = state.helius_client.lock().await;
+    helius_client
+        .update_token_holders_number()
+        .await
+        .context("Failed to update token holders number")?;
+
+    tracing::info!(holders = %helius_client.holders_number(), "Updated token holders number");
+
+    let winners = helius_client
+        .draw_winners(state.distributor_state.number_of_shares - 1)
+        .await
+        .context("Failed to draw winners")?;
+    drop(helius_client);
+    tracing::info!(?winners, "Winners has been selected");
+
+    let remaining_accounts = winners
+        .into_iter()
+        .flat_map(|winner| {
+            let ata = get_associated_token_address(&winner, &state.distributor_state.mint);
+            [AccountMeta::new_readonly(winner, false), AccountMeta::new(ata, false)]
+        })
+        .collect::<Vec<_>>();
+
+    let rpc_client = state.program.async_rpc();
+    let latest_hash = rpc_client
+        .get_latest_blockhash()
+        .await
+        .context("Failed to get latest blockhash")?;
+
+    let ixns = state
+        .program
+        .request()
+        .instruction(ComputeBudgetInstruction::set_compute_unit_limit(800_000))
+        .accounts(distributor::accounts::Distribute {
+            payer: state.payer.pubkey(),
+            distributor_authority: state.distributor_authority.pubkey(),
+            distributor_state: state.distributor_state_pubkey,
+            mint: state.distributor_state.mint,
+            vault: state.distributor_state.vault,
+            system_program: solana_sdk::system_program::ID,
+            token_program: spl_token::ID,
+            associated_token_program: spl_associated_token_account::ID,
+        })
+        .accounts(remaining_accounts)
+        .args(distributor::instruction::Distribute)
+        .instructions()
+        .context("Failed to create distribute instructions")?;
+
+    let tx = Transaction::new_signed_with_payer(
+        &ixns,
+        Some(&state.payer.pubkey()),
+        &[&state.payer, &state.distributor_authority],
+        latest_hash,
+    );
+
+    let signature = rpc_client
+        .send_transaction(&tx)
+        .await
+        .context("Failed to send transaction")?;
+
+    tracing::info!(%signature, "Distribute transaction sent");
 
     Ok(())
 }
 
 struct AppState {
-    rpc_client: RpcClient,
     program: Program<Arc<Keypair>>,
+    distributor_state_pubkey: Pubkey,
     distributor_state: DistributorState,
+    helius_client: Mutex<HeliusClient>,
+    payer: Keypair,
+    distributor_authority: Keypair,
 }
 
 #[shuttle_runtime::main]
@@ -76,10 +185,9 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
     let payer = payer_keypair.pubkey();
     let distributor_authority = distributor_authority_keypair.pubkey();
 
-    let rpc_client = RpcClient::new_with_commitment(solana_rpc_url.clone(), CommitmentConfig::confirmed());
     let program = AnchorClient::new_with_options(
         Cluster::Custom(solana_rpc_url.clone(), solana_rpc_url.clone()),
-        Arc::new(payer_keypair),
+        Arc::new(Keypair::new()),
         CommitmentConfig::confirmed(),
     )
     .program(program_id)
@@ -98,15 +206,26 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         .into());
     }
 
+    let mut helius_client =
+        HeliusClient::new(solana_rpc_url, distributor_state.marker_mint).context("Failed to create Helius client")?;
+    helius_client
+        .update_token_holders_number()
+        .await
+        .context("Failed to discover marker token holders number")?;
+
     let vault = distributor_state.vault;
 
     let router = Router::new()
-        .route("/", post(handle))
+        .route("/", post(webhook_handle))
+        .route("/distibute", get(explicit_handle))
         .layer(ServiceBuilder::new().layer(ValidateRequestHeaderLayer::bearer(&auth_token)))
         .with_state(Arc::new(AppState {
-            rpc_client,
             program,
             distributor_state,
+            helius_client: Mutex::new(helius_client),
+            payer: payer_keypair,
+            distributor_authority: distributor_authority_keypair,
+            distributor_state_pubkey,
         }));
 
     tracing::info!(%payer, %distributor_authority,
@@ -123,7 +242,7 @@ fn vault_balance(vault: &Pubkey, tx: &EncodedConfirmedTransactionWithStatusMeta)
             ..
         }) => account_keys
             .iter()
-            .map(|key| Pubkey::from_str(&key))
+            .map(|key| Pubkey::from_str(key))
             .collect::<Result<Vec<_>, _>>()?,
         _ => bail!("Failed to find account keys in transaction"),
     };
