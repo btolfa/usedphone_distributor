@@ -61,7 +61,13 @@ pub mod distributor {
         let share_size = ctx.accounts.distributor_state.share_size.to_le_bytes();
         let number_of_shares = ctx.accounts.distributor_state.number_of_shares.to_le_bytes();
 
-        let seeds = [mint.as_ref(), mint_marker.as_ref(), share_size.as_ref(), number_of_shares.as_ref() , &[ctx.accounts.distributor_state.distributor_state_bump]];
+        let seeds = [
+            mint.as_ref(),
+            mint_marker.as_ref(),
+            share_size.as_ref(),
+            number_of_shares.as_ref(),
+            &[ctx.accounts.distributor_state.distributor_state_bump],
+        ];
 
         let token_program = ctx.accounts.token_program.key();
         for (authority, token_account) in ctx.remaining_accounts.iter().tuples() {
@@ -119,7 +125,7 @@ pub mod distributor {
                 Burn {
                     mint: ctx.accounts.mint.to_account_info(),
                     from: ctx.accounts.vault.to_account_info(),
-                    authority: ctx.accounts.distributor_state.to_account_info()
+                    authority: ctx.accounts.distributor_state.to_account_info(),
                 },
                 &[&seeds],
             ),
