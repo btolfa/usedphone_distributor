@@ -715,6 +715,7 @@ dependencies = [
  "shuttle-secrets",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "tokio",
  "tower",
  "tower-http 0.5.1",
