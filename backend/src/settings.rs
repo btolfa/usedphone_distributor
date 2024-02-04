@@ -10,6 +10,7 @@ pub struct Settings {
 
     pub distributor_state: Pubkey,
     pub program_id: Pubkey,
+    pub auth_token: String,
 }
 
 impl TryFrom<&SecretStore> for Settings {
@@ -18,6 +19,9 @@ impl TryFrom<&SecretStore> for Settings {
     fn try_from(secret_store: &SecretStore) -> Result<Self, Self::Error> {
         let Some(solana_rpc_url) = secret_store.get("SOLANA_RPC_URL") else {
             bail!("SOLANA_RPC_URL not found in secret store");
+        };
+        let Some(auth_token) = secret_store.get("AUTH_TOKEN") else {
+            bail!("AUTH_TOKEN not found in secret store");
         };
         let Some(AnyKeypair(payer)) = secret_store
             .get("PAYER_KEYPAIR")
@@ -58,6 +62,7 @@ impl TryFrom<&SecretStore> for Settings {
             distributor_authority,
             distributor_state,
             program_id,
+            auth_token,
         })
     }
 }

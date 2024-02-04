@@ -1,6 +1,6 @@
 use anchor_client::{Client as AnchorClient, Cluster, Program};
 use anyhow::{anyhow, Context};
-use axum::{routing::get, Router};
+use axum::{routing::post, Router};
 use backend::settings::Settings;
 use distributor::DistributorState;
 use shuttle_secrets::SecretStore;
@@ -10,8 +10,10 @@ use solana_sdk::{
     signature::{Keypair, Signer},
 };
 use std::sync::Arc;
+use tower::ServiceBuilder;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 
-async fn hello_world() -> &'static str {
+async fn handle() -> &'static str {
     "Hello, world!"
 }
 
@@ -29,6 +31,7 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         distributor_authority: distributor_authority_keypair,
         distributor_state: distributor_state_pubkey,
         program_id,
+        auth_token,
     } = Settings::try_from(&secret_store)?;
 
     let payer = payer_keypair.pubkey();
@@ -59,7 +62,8 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
     let vault = distributor_state.vault;
 
     let router = Router::new()
-        .route("/", get(hello_world))
+        .route("/", post(handle))
+        .layer(ServiceBuilder::new().layer(ValidateRequestHeaderLayer::bearer(&auth_token)))
         .with_state(Arc::new(AppState {
             rpc_client,
             program,

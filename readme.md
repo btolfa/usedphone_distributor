@@ -74,6 +74,7 @@ Vault [4wZ2E3St33iB5xu9R2Kf6NbMa5pkoeqVNe1SkcFVvoX5](https://explorer.solana.com
 #### How to mint and fund pools
 
 ```bash
+spl-token create-account 6VzNqK5a68KTqfkC2xRzF3fH5kKKAA8D2xdPCe6FDxS7
 spl-token mint 6VzNqK5a68KTqfkC2xRzF3fH5kKKAA8D2xdPCe6FDxS7 10000000000 --mint-authority keys/authority.json <TOKEN-ACCOUNT>
 spl-token transfer 6VzNqK5a68KTqfkC2xRzF3fH5kKKAA8D2xdPCe6FDxS7 1000000000 <TOKEN-ACCOUNT>
 ```
