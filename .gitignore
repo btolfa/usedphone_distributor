@@ -7,3 +7,6 @@ node_modules
 test-ledger
 .yarn
 .idea
+Secrets.toml
+payer.json
+.env
