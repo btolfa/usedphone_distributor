@@ -9,7 +9,6 @@ pub struct Settings {
     pub distributor_authority: Keypair,
 
     pub distributor_state: Pubkey,
-    pub vault: Pubkey,
     pub program_id: Pubkey,
 }
 
@@ -44,14 +43,6 @@ impl TryFrom<&SecretStore> for Settings {
         else {
             bail!("DISTRIBUTOR_STATE not found in secret store")
         };
-        let Some(vault) = secret_store
-            .get("VAULT")
-            .map(|secret| secret.parse())
-            .transpose()
-            .context("Can't deserialize VAULT")?
-        else {
-            bail!("VAULT not found in secret store")
-        };
         let Some(program_id) = secret_store
             .get("PROGRAM_ID")
             .map(|secret| secret.parse())
@@ -66,7 +57,6 @@ impl TryFrom<&SecretStore> for Settings {
             payer,
             distributor_authority,
             distributor_state,
-            vault,
             program_id,
         })
     }
