@@ -9,3 +9,4 @@ test-ledger
 .idea
 Secrets.toml
 payer.json
+.env
