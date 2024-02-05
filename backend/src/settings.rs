@@ -5,12 +5,14 @@ use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 
 pub struct Settings {
     pub solana_rpc_url: String,
+    pub priority_fee_url: String,
     pub payer: Keypair,
     pub distributor_authority: Keypair,
 
     pub distributor_state: Pubkey,
     pub program_id: Pubkey,
     pub auth_token: String,
+    pub memo: String,
 }
 
 impl TryFrom<&SecretStore> for Settings {
@@ -22,6 +24,12 @@ impl TryFrom<&SecretStore> for Settings {
         };
         let Some(auth_token) = secret_store.get("AUTH_TOKEN") else {
             bail!("AUTH_TOKEN not found in secret store");
+        };
+        let Some(memo) = secret_store.get("MEMO") else {
+            bail!("MEMO not found in secret store");
+        };
+        let Some(priority_fee_url) = secret_store.get("PRIORITY_FEE_URL") else {
+            bail!("PRIORITY_FEE_URL not found in secret store");
         };
         let Some(AnyKeypair(payer)) = secret_store
             .get("PAYER_KEYPAIR")
@@ -58,11 +66,13 @@ impl TryFrom<&SecretStore> for Settings {
 
         Ok(Self {
             solana_rpc_url,
+            priority_fee_url,
             payer,
             distributor_authority,
             distributor_state,
             program_id,
             auth_token,
+            memo,
         })
     }
 }

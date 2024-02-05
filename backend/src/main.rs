@@ -7,9 +7,11 @@ use axum::{
     Json, Router,
 };
 use backend::{
-    settings::Settings, token_holder::HeliusClient, transaction_status::EncodedConfirmedTransactionWithStatusMeta,
+    priority_fee::fetch_recent_priority_fee, settings::Settings, token_holder::HeliusClient,
+    transaction_status::EncodedConfirmedTransactionWithStatusMeta,
 };
 use distributor::DistributorState;
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use shuttle_secrets::SecretStore;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -125,11 +127,16 @@ async fn distribute_tokens(state: &AppState, vault_balance: u64) -> anyhow::Resu
         .get_latest_blockhash()
         .await
         .context("Failed to get latest blockhash")?;
+    let priority_fee = fetch_recent_priority_fee(&state.priority_fee)
+        .await
+        .context("Failed to fetch recent priority fee")?;
 
     let ixns = state
         .program
         .request()
         .instruction(ComputeBudgetInstruction::set_compute_unit_limit(800_000))
+        .instruction(ComputeBudgetInstruction::set_compute_unit_price(priority_fee))
+        .instruction(spl_memo::build_memo(state.memo.as_bytes(), &[]))
         .accounts(distributor::accounts::Distribute {
             payer: state.payer.pubkey(),
             distributor_authority: state.distributor_authority.pubkey(),
@@ -152,6 +159,9 @@ async fn distribute_tokens(state: &AppState, vault_balance: u64) -> anyhow::Resu
         latest_hash,
     );
 
+    let tx_size = bincode::serialize(&tx).unwrap_or_default().len();
+    tracing::info!(%tx_size, "Distribute transaction size. Maximum possible is 1232 bytes.");
+
     let signature = rpc_client
         .send_transaction(&tx)
         .await
@@ -167,19 +177,23 @@ struct AppState {
     distributor_state_pubkey: Pubkey,
     distributor_state: DistributorState,
     helius_client: Mutex<HeliusClient>,
+    priority_fee: HttpClient,
     payer: Keypair,
     distributor_authority: Keypair,
+    memo: String,
 }
 
 #[shuttle_runtime::main]
 async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_axum::ShuttleAxum {
     let Settings {
         solana_rpc_url,
+        priority_fee_url,
         payer: payer_keypair,
         distributor_authority: distributor_authority_keypair,
         distributor_state: distributor_state_pubkey,
         program_id,
         auth_token,
+        memo,
     } = Settings::try_from(&secret_store)?;
 
     let payer = payer_keypair.pubkey();
@@ -213,6 +227,10 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         .await
         .context("Failed to discover marker token holders number")?;
 
+    let priority_fee = HttpClientBuilder::default()
+        .build(priority_fee_url)
+        .context("Failed to build priority fee client")?;
+
     let vault = distributor_state.vault;
 
     let router = Router::new()
@@ -226,6 +244,8 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
             payer: payer_keypair,
             distributor_authority: distributor_authority_keypair,
             distributor_state_pubkey,
+            priority_fee,
+            memo,
         }));
 
     tracing::info!(%payer, %distributor_authority,
