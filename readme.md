@@ -92,3 +92,16 @@ solana --config <config> program set-upgrade-authority <old-upgrade-authority> -
 anchor migrate --provider.cluster mainnet
 env ANCHOR_WALLET=~/crypton/csm_deploy.json ./node_modules/.bin/ts-node .anchor/deploy.ts
 ```
+
+#### mainnet settings
+
+programId [5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1](https://explorer.solana.com/address/5YP6jdWGTNDUhLYMCfocbyfT4RN58QbhVdtYmBdL6Af1)
+
+```
+mint E2x5XH8eHkZGiaA8mFicU5CoGUJxSRKiXjEW5Nybf8Nn
+marker mint 9gwTegFJJErDpWJKjPfLr2g2zrE3nL1v5zpwbtsk3c6P
+```
+
+DistributorState [9eiohYGDXQA2KJW1VdSEm2fZt2PVNA9ujQAMaeANxQPo](https://explorer.solana.com/address/9eiohYGDXQA2KJW1VdSEm2fZt2PVNA9ujQAMaeANxQPo)
+Vault [AFvsmxNq9maU5daAmxDuvPeJtEpfnMXnSpwrEgcVyen8](https://explorer.solana.com/address/AFvsmxNq9maU5daAmxDuvPeJtEpfnMXnSpwrEgcVyen8)
+DistributorAuthority [6Ub4CxXEgBvx7ni9m88s9Uws29zgErVF8dMrPz2EH45e](https://explorer.solana.com/address/6Ub4CxXEgBvx7ni9m88s9Uws29zgErVF8dMrPz2EH45e)
