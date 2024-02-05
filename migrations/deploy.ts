@@ -18,7 +18,7 @@ module.exports = async function (provider) {
   if (endpoint.includes("localhost") || endpoint.includes("devnet")) {
     await initDevnet(program, provider.wallet.publicKey);
   } else {
-    console.log("Mainnet deployment not implemented yet.");
+    await initMainnet(program, provider.wallet.publicKey);
   }
 };
 
@@ -39,4 +39,23 @@ async function initDevnet(program: Program<Distributor>, payer: PublicKey) {
     })
     .rpc();
   console.log("Distributor initialized at ", tx);
+}
+
+async function initMainnet(program: Program<Distributor>, payer: PublicKey) {
+    const distributorAuthority = Keypair.fromSecretKey(new Uint8Array(JSON.parse(fs.readFileSync('distributor-authority.json').toString()))).publicKey;
+    const mint = new PublicKey("E2x5XH8eHkZGiaA8mFicU5CoGUJxSRKiXjEW5Nybf8Nn");
+    const markerMint = new PublicKey("9gwTegFJJErDpWJKjPfLr2g2zrE3nL1v5zpwbtsk3c6P");
+
+    let shareSize = (new BN(331)).mul(new BN(1_000_000_000));
+    let numberOfShares = new BN(10);
+
+    let tx = await program.methods.initialize(shareSize, numberOfShares)
+        .accounts({
+            payer,
+            mint,
+            markerMint,
+            distributorAuthority: distributorAuthority,
+        })
+        .rpc();
+    console.log("Distributor initialized at ", tx);
 }

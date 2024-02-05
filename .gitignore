@@ -10,3 +10,5 @@ test-ledger
 Secrets.toml
 payer.json
 .env
+Secrets.toml.old
+distributor-authority.json

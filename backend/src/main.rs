@@ -194,6 +194,7 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         program_id,
         auth_token,
         memo,
+        marker_mint,
     } = Settings::try_from(&secret_store)?;
 
     let payer = payer_keypair.pubkey();
@@ -220,8 +221,7 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         .into());
     }
 
-    let mut helius_client =
-        HeliusClient::new(solana_rpc_url, distributor_state.marker_mint).context("Failed to create Helius client")?;
+    let mut helius_client = HeliusClient::new(solana_rpc_url, marker_mint).context("Failed to create Helius client")?;
     helius_client
         .update_token_holders_number()
         .await

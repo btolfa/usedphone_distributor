@@ -11,6 +11,7 @@ pub struct Settings {
 
     pub distributor_state: Pubkey,
     pub program_id: Pubkey,
+    pub marker_mint: Pubkey,
     pub auth_token: String,
     pub memo: String,
 }
@@ -63,6 +64,14 @@ impl TryFrom<&SecretStore> for Settings {
         else {
             bail!("PROGRAM_ID not found in secret store")
         };
+        let Some(marker_mint) = secret_store
+            .get("MARKER_MINT")
+            .map(|secret| secret.parse())
+            .transpose()
+            .context("Can't deserialize MARKER_MINT")?
+        else {
+            bail!("MARKER_MINT not found in secret store")
+        };
 
         Ok(Self {
             solana_rpc_url,
@@ -73,6 +82,7 @@ impl TryFrom<&SecretStore> for Settings {
             program_id,
             auth_token,
             memo,
+            marker_mint,
         })
     }
 }
