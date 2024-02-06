@@ -50,7 +50,10 @@ async fn explicit_handle(State(handle): State<ActorHandle>) -> Result<(), Status
 }
 
 #[shuttle_runtime::main]
-async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_axum::ShuttleAxum {
+async fn axum(
+    #[shuttle_secrets::Secrets] secret_store: SecretStore,
+    #[shuttle_shared_db::Postgres] pool: sqlx::PgPool,
+) -> shuttle_axum::ShuttleAxum {
     let Settings {
         solana_rpc_url,
         priority_fee_url,
@@ -87,11 +90,14 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         .into());
     }
 
-    let mut helius_client = HeliusClient::new(solana_rpc_url, marker_mint).context("Failed to create Helius client")?;
-    helius_client
-        .update_token_holders_number()
+    sqlx::migrate!()
+        .run(&pool)
         .await
-        .context("Failed to discover marker token holders number")?;
+        .context("Failed to run database migrations")?;
+
+    let helius_client = HeliusClient::new(solana_rpc_url, marker_mint, pool)
+        .await
+        .context("Failed to create Helius client")?;
 
     let priority_fee = HttpClientBuilder::default()
         .build(priority_fee_url)

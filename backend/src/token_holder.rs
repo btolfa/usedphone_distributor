@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::{bail, Context};
 use itertools::Itertools;
 use jsonrpsee::{
     http_client::{HttpClient, HttpClientBuilder},
@@ -44,21 +44,39 @@ trait HeliusGetTokenAccounts {
 pub struct HeliusClient {
     client: HttpClient,
     mint: Pubkey,
+    pool: sqlx::PgPool,
     holders_number: u64,
 }
 
 impl HeliusClient {
-    pub fn new(url: impl AsRef<str>, mint: Pubkey) -> anyhow::Result<Self> {
+    pub async fn new(url: impl AsRef<str>, mint: Pubkey, pool: sqlx::PgPool) -> anyhow::Result<Self> {
         let client = HttpClientBuilder::default().build(url)?;
+
+        let holders_number: Option<i64> = sqlx::query_scalar("SELECT num FROM holders WHERE mint = $1")
+            .bind(mint.to_string())
+            .fetch_optional(&pool)
+            .await
+            .context("Failed to fetch holders number")?;
+
         Ok(Self {
             client,
             mint,
-            holders_number: 0,
+            pool,
+            holders_number: holders_number.unwrap_or_default() as u64,
         })
     }
 
     pub async fn update_token_holders_number(&mut self) -> anyhow::Result<()> {
         self.holders_number = self.discover_token_holders_number().await?;
+        if let Err(err) =
+            sqlx::query("INSERT INTO holders (mint, num) VALUES ($1, $2) ON CONFLICT (mint) DO UPDATE SET num = $2")
+                .bind(self.mint.to_string())
+                .bind(self.holders_number as i64)
+                .execute(&self.pool)
+                .await
+        {
+            tracing::warn!(%err, "Failed to update holders number in the database");
+        }
         Ok(())
     }
 
@@ -116,25 +134,38 @@ mod tests {
     use crate::token_holder::HeliusClient;
     use dotenvy::dotenv;
     use solana_sdk::pubkey;
+    use sqlx::PgPool;
 
-    #[tokio::test]
-    async fn should_discover_token_holders_number() -> anyhow::Result<()> {
+    #[ignore]
+    #[sqlx::test]
+    async fn should_discover_token_holders_number(pool: PgPool) -> anyhow::Result<()> {
         dotenv().ok();
         let solana_rpc_url = std::env::var("SOLANA_RPC_URL")?;
 
-        let client = HeliusClient::new(solana_rpc_url, pubkey!("7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"))?;
+        let client = HeliusClient::new(
+            solana_rpc_url,
+            pubkey!("7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"),
+            pool,
+        )
+        .await?;
         let holders_number = client.discover_token_holders_number().await?;
         println!("{}", holders_number);
 
         Ok(())
     }
 
-    #[tokio::test]
-    async fn should_select_random_holders() -> anyhow::Result<()> {
+    #[ignore]
+    #[sqlx::test]
+    async fn should_select_random_holders(pool: PgPool) -> anyhow::Result<()> {
         dotenv().ok();
         let solana_rpc_url = std::env::var("SOLANA_RPC_URL")?;
 
-        let mut client = HeliusClient::new(solana_rpc_url, pubkey!("7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"))?;
+        let mut client = HeliusClient::new(
+            solana_rpc_url,
+            pubkey!("7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"),
+            pool,
+        )
+        .await?;
         client.update_token_holders_number().await?;
 
         let winners = client.draw_winners(10).await?;

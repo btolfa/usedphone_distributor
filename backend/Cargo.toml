@@ -19,14 +19,14 @@ serde_with = "3.6.0"
 shuttle-axum = "0.38.0"
 shuttle-runtime = "0.38.0"
 shuttle-secrets = "0.38.0"
-shuttle-shared-db = { version = "0.38.0", features = ["postgres"] }
+shuttle-shared-db = { version = "0.38.0", features = ["postgres", "sqlx"] }
 solana-client = "1.16.27"
 solana-sdk = "1.16.27"
 solana-transaction-status = "1.16.27"
 spl-associated-token-account = { version = "2.2.0", features = ["no-entrypoint"] }
 spl-memo = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token = { version = "3.5.0", features = ["no-entrypoint"] }
-sqlx = "0.7.3"
+sqlx = { version = "0.7.3", features = ["postgres", "migrate"] }
 tokio = "1.36.0"
 tower = "0.4.13"
 tower-http = { version = "0.5.1", features = ["auth"] }
