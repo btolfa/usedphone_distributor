@@ -120,8 +120,8 @@ async fn axum(
 
     let router = Router::new()
         .route("/", post(webhook_handle))
-        .route("/distibute", get(explicit_handle))
         .layer(ServiceBuilder::new().layer(ValidateRequestHeaderLayer::bearer(&auth_token)))
+        .route("/distibute", get(explicit_handle))
         .with_state(handle);
 
     tracing::info!(%payer, %distributor_authority,

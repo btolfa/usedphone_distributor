@@ -104,16 +104,12 @@ impl Actor {
             .get_latest_blockhash()
             .await
             .context("Failed to get latest blockhash")?;
-        let priority_fee = fetch_recent_priority_fee(&self.state.priority_fee)
-            .await
-            .context("Failed to fetch recent priority fee")?;
 
         let ixns = self
             .state
             .program
             .request()
             .instruction(ComputeBudgetInstruction::set_compute_unit_limit(800_000))
-            .instruction(ComputeBudgetInstruction::set_compute_unit_price(priority_fee))
             .instruction(spl_memo::build_memo(self.state.memo.as_bytes(), &[]))
             .accounts(distributor::accounts::Distribute {
                 payer: self.state.payer.pubkey(),
