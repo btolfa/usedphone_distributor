@@ -73,3 +73,22 @@ pub struct UiTransactionStatusMeta {
     )]
     pub compute_units_consumed: OptionSerializer<u64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+
+    #[test]
+    fn should_deser_transfer() -> anyhow::Result<()> {
+        let json = include_bytes!("transfer.json");
+        let _: Vec<EncodedConfirmedTransactionWithStatusMeta> = serde_json::from_slice(json)?;
+        Ok(())
+    }
+
+    #[test]
+    fn should_deser_deposit() -> anyhow::Result<()> {
+        let json = include_bytes!("deposit.json");
+        let _: Vec<EncodedConfirmedTransactionWithStatusMeta> = serde_json::from_slice(json)?;
+        Ok(())
+    }
+}
